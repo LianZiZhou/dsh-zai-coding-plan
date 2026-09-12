@@ -1,0 +1,7 @@
+# dsh bundle patch: inserts this plugin into a profile's layer stack.
+#
+# The authorization the sign-in performs is this plugin's own — it needs no
+# other row. The pi-ai adapter it configures is already part of dsh-base.
+- insert:
+    - id: zai-coding-plan
+      name: 'dsh-zai-coding-plan'
