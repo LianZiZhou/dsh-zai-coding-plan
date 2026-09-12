@@ -1,14 +1,14 @@
 {
   "name": "dsh-zai-coding-plan",
   "version": "0.1.0",
-  "description": "Sign in to Z.AI's GLM Coding Plan from DeepSeek Harness with /zai-login — no API key to copy. · 在 DSH 里用 /zai-login 登录 Z.AI GLM Coding Plan，无需手抄密钥。",
+  "description": "Sign in to Z.AI's GLM Coding Plan from DeepSeek Harness with /zai-login \u2014 no API key to copy. \u00b7 \u5728 DSH \u91cc\u7528 /zai-login \u767b\u5f55 Z.AI GLM Coding Plan\uff0c\u65e0\u9700\u624b\u6284\u5bc6\u94a5\u3002",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/OWNER/dsh-zai-coding-plan.git"
+    "url": "git+https://github.com/LianZiZhou/dsh-zai-coding-plan.git"
   },
   "keywords": [
     "deepseek",
@@ -63,5 +63,9 @@
     "@vitest/coverage-v8": "^4.1.11",
     "typescript": "^5.9.2",
     "vitest": "^4.1.8"
+  },
+  "homepage": "https://github.com/LianZiZhou/dsh-zai-coding-plan#readme",
+  "bugs": {
+    "url": "https://github.com/LianZiZhou/dsh-zai-coding-plan/issues"
   }
 }
