@@ -19,23 +19,26 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-commands'
 import type {} from '@deepseek-ai/dsh-user-questions'
-import { credentialRef } from '@deepseek-ai/dsh-credentials'
-import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import { runZaiSignIn } from './oauth.js'
 import type { ZaiSignInConversation } from './oauth.js'
+import { DEFAULT_CREDENTIAL_REF, provisionRoute, ROUTE } from './provision.js'
 
 export { KEY_NAME } from './mint.js'
 export { parseAuthorizationAnswer, REDIRECT_URI, runZaiSignIn } from './oauth.js'
 export type { ZaiSignInConversation, ZaiSignInOptions } from './oauth.js'
+export { DEFAULT_CREDENTIAL_REF, provisionRoute, provisionState, ProvisionError, ROUTE } from './provision.js'
+export type { ProvisionResult, ProvisionTarget } from './provision.js'
 export { ZaiSignInError } from './transport.js'
 
+/** Cordis plugin name. */
 export const name = 'zai-coding-plan'
 
-/** Services this plugin cannot work without. */
+/**
+ * Services this plugin cannot work without. The credential store and the
+ * settings provider are among them rather than optional: a sign-in that could
+ * not store what it minted would spend the human's time and leave nothing.
+ */
 export const inject = ['commands', 'userQuestions', 'credentials', 'settings']
-
-/** The pi-ai adapter's settings section, where a provider route's profile lives. */
-const PI_AI_NS = settingsNamespace('llm-pi-ai')
 
 /** The question id the sign-in conversation answers under. */
 const QUESTION_ID = 'zai-redirect'
@@ -75,8 +78,8 @@ interface Resolved {
  */
 function resolve(config: Config): Resolved {
   return {
-    provider: config.provider ?? 'zai',
-    ref: config.credentialRef ?? 'ZAI_API_KEY',
+    provider: config.provider ?? ROUTE,
+    ref: config.credentialRef ?? DEFAULT_CREDENTIAL_REF,
     redirectUri: config.redirectUri,
   }
 }
@@ -94,7 +97,7 @@ function resolve(config: Config): Resolved {
  */
 export function conversationFor(
   ctx: Context,
-  run: { readonly agent?: unknown, readonly signal: AbortSignal },
+  run: { readonly agent?: unknown; readonly signal: AbortSignal },
 ): ZaiSignInConversation {
   return {
     signal: run.signal,
@@ -114,30 +117,6 @@ export function conversationFor(
       return item?.custom ?? item?.selected[0] ?? ''
     },
   }
-}
-
-/**
- * Store the minted key and declare the route that reads it.
- *
- * Two writes, because a credential is not a route: the pi-ai adapter registers
- * only what its settings section declares, so a key on its own leaves the
- * Models page and the model picker unchanged. The profile names the reference
- * rather than carrying the key, which is what keeps `settings.yaml` free of
- * secrets. An existing profile is left exactly as it is — it may carry an
- * endpoint, a narrowed model list, or a different reference that this sign-in
- * has no business rewriting.
- * @param ctx - the plugin context carrying the credential and settings services.
- * @param resolved - the route and reference this run configures.
- * @param key - the durable key the sign-in minted.
- */
-export async function store(ctx: Context, resolved: Resolved, key: string): Promise<void> {
-  await ctx.credentials.set(credentialRef(resolved.ref), key)
-  const section = ctx.settings.describe().find(descriptor => descriptor.ns === PI_AI_NS)?.value as
-    { providers?: Record<string, unknown> } | undefined
-  if (section?.providers?.[resolved.provider] !== undefined) return
-  await ctx.settings.mutate(PI_AI_NS, [
-    { op: 'set', path: ['providers', resolved.provider], value: { apiKeyEnv: resolved.ref } },
-  ])
 }
 
 /**
@@ -161,10 +140,17 @@ export function apply(ctx: Context, config: Config = {}): () => void {
         const key = await runZaiSignIn(conversationFor(ctx, run), {
           ...resolved.redirectUri === undefined ? {} : { redirectUri: resolved.redirectUri },
         })
-        await store(ctx, resolved, key)
+        const provisioned = await provisionRoute(
+          key,
+          { credentials: ctx.credentials, settings: ctx.settings },
+          resolved.ref,
+          resolved.provider,
+        )
         return {
           kind: 'success',
-          text: `Signed in to Z.AI. The ${resolved.provider} route is configured — its models are now selectable.`,
+          text: provisioned.routeDeclared
+            ? `Signed in to Z.AI. The ${resolved.provider} route is configured — its models are now selectable.`
+            : `Signed in to Z.AI. The ${resolved.provider} route was already configured; its key is refreshed.`,
         }
       } catch (error: unknown) {
         const detail = error instanceof Error ? error.message : String(error)

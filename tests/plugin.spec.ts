@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import { settingsNamespace } from '@deepseek-ai/dsh-settings'
-import { apply, conversationFor, store } from '../src/index.ts'
+import { apply, conversationFor } from '../src/index.ts'
+import { ProvisionError, provisionRoute, provisionState } from '../src/provision.ts'
 import { mintReplies, routed, TOKEN } from './fake-zai.ts'
 import type { Replies } from './fake-zai.ts'
 
@@ -92,6 +93,30 @@ describe('the plugin entry', () => {
     vi.unstubAllGlobals()
   })
 
+  it('says the key was refreshed when the route was already configured', async () => {
+    const context = routed(signInReplies())
+    vi.stubGlobal('fetch', context.fetch)
+    const { ctx, registered, mutations } = host({ section: { providers: { zai: { baseURL: 'https://proxy/v1' } } } })
+    apply(ctx)
+    const result = await (registered[0] as Registered)
+      .handler({ signal: new AbortController().signal })
+    expect(result).toMatchObject({ kind: 'success' })
+    expect(result.text).toContain('key is refreshed')
+    expect(mutations).toEqual([])
+    vi.unstubAllGlobals()
+  })
+
+  it('asks for a redirect a deployment corrected when the allowlist moved again', async () => {
+    const context = routed(signInReplies())
+    vi.stubGlobal('fetch', context.fetch)
+    const { ctx, registered, asked } = host({ section: { providers: {} } })
+    apply(ctx, { redirectUri: 'zcode://elsewhere/cb' })
+    await (registered[0] as Registered).handler({ signal: new AbortController().signal })
+    const question = (asked[0] as { questions: { detail: string }[] }).questions[0]
+    expect(question?.detail).toContain('zcode://elsewhere/cb')
+    vi.unstubAllGlobals()
+  })
+
   it('reports the step that broke rather than throwing at the chat', async () => {
     const context = routed(signInReplies({ [`POST ${TOKEN}`]: { code: 401, msg: 'bad code' } }))
     vi.stubGlobal('fetch', context.fetch)
@@ -119,17 +144,73 @@ describe('the plugin entry', () => {
 })
 
 describe('storing what the sign-in produced', () => {
+  /** The two seams, as provisioning takes them. */
+  function target(built: ReturnType<typeof host>) {
+    const ctx = built.ctx as unknown as { credentials: never; settings: never }
+    return { credentials: ctx.credentials, settings: ctx.settings }
+  }
+
   it('leaves a route someone already configured exactly as it is', async () => {
-    const { ctx, credentials, mutations } = host({ section: { providers: { zai: { baseURL: 'https://proxy/v1' } } } })
-    await store(ctx, { provider: 'zai', ref: 'ZAI_API_KEY', redirectUri: undefined }, 'id.secret')
-    expect(credentials).toEqual([['ZAI_API_KEY', 'id.secret']])
-    expect(mutations).toEqual([])
+    const built = host({ section: { providers: { zai: { baseURL: 'https://proxy/v1' } } } })
+    await expect(provisionRoute('id.secret', target(built))).resolves.toEqual({
+      ref: 'ZAI_API_KEY',
+      routeDeclared: false,
+    })
+    expect(built.credentials).toEqual([['ZAI_API_KEY', 'id.secret']])
+    expect(built.mutations).toEqual([])
   })
 
   it('declares the route when the section does not exist at all', async () => {
-    const { ctx, mutations } = host()
-    await store(ctx, { provider: 'zai', ref: 'MY_REF', redirectUri: undefined }, 'id.secret')
-    expect(mutations).toEqual([[{ op: 'set', path: ['providers', 'zai'], value: { apiKeyEnv: 'MY_REF' } }]])
+    const built = host()
+    await expect(provisionRoute('id.secret', target(built), 'MY_REF')).resolves.toEqual({
+      ref: 'MY_REF',
+      routeDeclared: true,
+    })
+    expect(built.mutations).toEqual([[{ op: 'set', path: ['providers', 'zai'], value: { apiKeyEnv: 'MY_REF' } }]])
+  })
+
+  it('declares the route a deployment redirected the sign-in at', async () => {
+    const built = host({ section: { providers: {} } })
+    await provisionRoute('id.secret', target(built), 'ZAI_API_KEY', 'zai-coding-cn')
+    expect(built.mutations).toEqual([[
+      { op: 'set', path: ['providers', 'zai-coding-cn'], value: { apiKeyEnv: 'ZAI_API_KEY' } },
+    ]])
+  })
+
+  it('refuses when there is nowhere to keep the key', async () => {
+    await expect(provisionRoute('id.secret', {})).rejects.toMatchObject({ code: 'NO_CREDENTIAL_STORE' })
+  })
+
+  it('names the reference when the store refuses the write', async () => {
+    const credentials = { set: () => Promise.reject(new Error('read-only source shadows it')) }
+    await expect(provisionRoute('id.secret', { credentials: credentials as never }))
+      .rejects.toMatchObject({ code: 'CREDENTIAL_REFUSED' })
+  })
+
+  it('keeps the key when the route cannot be declared', async () => {
+    const built = host({ section: { providers: {} } })
+    const credentials = target(built).credentials
+    await expect(provisionRoute('id.secret', { credentials })).rejects.toMatchObject({
+      code: 'NO_SETTINGS_PROVIDER',
+    })
+    expect(built.credentials).toEqual([['ZAI_API_KEY', 'id.secret']])
+
+    const settings = {
+      describe: () => [],
+      mutate: () => Promise.reject('the settings document is read-only'),
+    }
+    await expect(provisionRoute('id.secret', { credentials, settings: settings as never }))
+      .rejects.toMatchObject({ code: 'SETTINGS_REFUSED' })
+    expect(ProvisionError).toBeTypeOf('function')
+  })
+
+  it('reports what this deployment already has', async () => {
+    const built = host({ section: { providers: { zai: {} } } })
+    const seams = target(built)
+    const configured = { describe: () => Promise.resolve({ configured: true, writable: true }) }
+    await expect(provisionState({ credentials: configured as never, settings: seams.settings }))
+      .resolves.toEqual({ keyStored: true, routeDeclared: true })
+    await expect(provisionState({})).resolves.toEqual({ keyStored: false, routeDeclared: false })
   })
 })
 

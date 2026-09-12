@@ -1,7 +1,7 @@
 {
   "name": "dsh-zai-coding-plan",
   "version": "0.1.0",
-  "description": "Sign in to Z.AI's GLM Coding Plan from the DeepSeek Harness Models page — one click, no API key to copy. · 在 DSH 模型页一键登录 Z.AI GLM Coding Plan，无需手抄密钥。",
+  "description": "Sign in to Z.AI's GLM Coding Plan from DeepSeek Harness with /zai-login — no API key to copy. · 在 DSH 里用 /zai-login 登录 Z.AI GLM Coding Plan，无需手抄密钥。",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
@@ -26,7 +26,6 @@
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
     },
-    "./client": "./lib/client.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
@@ -39,41 +38,29 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
-    },
-    "client": {
-      "inject": [
-        "@deepseek-ai/dsh-client-ui-settings",
-        "@deepseek-ai/dsh-client-ui-settings-models"
-      ],
-      "platform": "web"
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && tsdown",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json --noEmit",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "prepack": "npm run build"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-commands": "^0.0.1-rc.1 || ^0.1.0",
     "@deepseek-ai/dsh-credentials": "^0.0.1-rc.1 || ^0.1.0",
-    "@deepseek-ai/dsh-host-webserver": "^0.0.1-rc.1 || ^0.1.0",
-    "@deepseek-ai/dsh-settings": "^0.0.1-rc.1 || ^0.1.0"
+    "@deepseek-ai/dsh-settings": "^0.0.1-rc.1 || ^0.1.0",
+    "@deepseek-ai/dsh-user-questions": "^0.0.1-rc.3 || ^0.1.0"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.2",
-    "@deepseek-ai/dsh-agent": "^0.1.0-rc.6",
     "@deepseek-ai/dsh-commands": "^0.0.1-rc.1",
     "@deepseek-ai/dsh-credentials": "^0.0.1-rc.1",
-    "@deepseek-ai/dsh-host-webserver": "^0.0.1-rc.1",
-    "@deepseek-ai/dsh-invariants": "^0.0.1-rc.1",
     "@deepseek-ai/dsh-settings": "^0.0.1-rc.1",
     "@deepseek-ai/dsh-user-questions": "^0.0.1-rc.3",
     "@types/node": "^22.10.0",
-    "@types/react": "^19.0.0",
-    "@vitest/coverage-v8": "^5.0.0",
-    "react": "^19.0.0",
-    "tsdown": "^0.15.6",
+    "@vitest/coverage-v8": "^4.1.11",
     "typescript": "^5.9.2",
     "vitest": "^4.1.8"
   }

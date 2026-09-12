@@ -61,17 +61,18 @@ Every field is optional. Add them to the plugin's row in the profile's `cordis.p
 - **The code is copied by hand.** `zcode://zai-auth/callback` is a scheme no browser hands back to this process. A desktop that registers itself as the `zcode://` handler could capture it instead; this plugin does not, because doing so takes the scheme away from Z.AI's own client for as long as it is registered — and it is worthless when the browser and the harness are not on the same machine.
 - **No test reaches Z.AI.** `tests/fake-zai.ts` answers the whole endpoint sequence, so a change on Z.AI's side is found by a human signing in, not by CI. Every failure names the step that broke.
 - **Requires the pi-ai adapter.** The route it configures belongs to `@deepseek-ai/dsh-llm-pi-ai`, which ships in `dsh-base`. Without it the credential is stored and the route declaration goes nowhere.
+- **A failed route declaration keeps the key.** If the settings document is read-only or absent, the command reports it and names the reference the key was stored under, so the provider can be added by hand on the Models page. Losing a credential the human did obtain would be the worse failure.
 
 ## Development
 
 ```bash
-npm install --legacy-peer-deps   # published dsh rc packages disagree on peer ranges
+npm install
 npm run typecheck
-npm test
+npm test          # 54 tests, no network
 npm run build
 ```
 
-The `--legacy-peer-deps` flag is for the local type install only: these packages are peer dependencies supplied by the host at runtime.
+The `@deepseek-ai/*` packages are dev dependencies here only so the types resolve; at runtime the host supplies them, which is what the peer ranges declare.
 
 ## Credit
 
